@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tweet Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Removed oauth-1.0a and crypto-js - not needed for this approach -->
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <h1 class="text-3xl font-bold mb-8">Tweet Manager</h1>
+
+        <!-- API Keys Setup -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4">API Keys Setup</h2>
+            <form id="apiForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Gemini API Key</label>
+                    <input type="password" id="geminiKey" class="mt-1 block w-full rounded-md border border-gray-300 p-2">
+                </div>
+                <!-- Twitter API keys are no longer directly used for posting in this client-side approach -->
+                <p class="text-sm text-gray-500">Twitter API keys are only needed for potential future features requiring data retrieval. Posting will use a direct tweet intent.</p>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Twitter API Key (Optional)</label>
+                    <input type="text" id="twitterKey" class="mt-1 block w-full rounded-md border border-gray-300 p-2" disabled>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Twitter API Secret (Optional)</label>
+                    <input type="password" id="twitterSecret" class="mt-1 block w-full rounded-md border border-gray-300 p-2" disabled>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Twitter Access Token (Optional)</label>
+                    <input type="text" id="accessToken" class="mt-1 block w-full rounded-md border border-gray-300 p-2" disabled>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Twitter Access Token Secret (Optional)</label>
+                    <input type="password" id="accessSecret" class="mt-1 block w-full rounded-md border border-gray-300 p-2" disabled>
+                </div>
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">Save Gemini Key</button>
+            </form>
+        </div>
+
+        <!-- Tweet Generation Settings -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4">Tweet Settings</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Topics (comma-separated)</label>
+                    <input type="text" id="topics" class="mt-1 block w-full rounded-md border border-gray-300 p-2"
+                           placeholder="tech, AI, programming">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tweet Style</label>
+                    <select id="style" class="mt-1 block w-full rounded-md border border-gray-300 p-2">
+                        <option value="professional">Professional</option>
+                        <option value="casual">Casual</option>
+                        <option value="humorous">Humorous</option>
+                    </select>
+                </div>
+                <button onclick="generateTweets()" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600">
+                    Generate Tweets
+                </button>
+            </div>
+        </div>
+
+        <!-- Generated Tweets -->
+        <div id="tweetList" class="space-y-4"></div>
+    </div>
+
+    <script>
+        // Save Gemini API key to localStorage
+        document.getElementById('apiForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const keys = {
+                gemini: document.getElementById('geminiKey').value,
+            };
+            localStorage.setItem('apiKeys', JSON.stringify(keys));
+            alert('Gemini API key saved!');
+        });
+
+        // Load saved Gemini API key
+        window.onload = () => {
+            const keys = JSON.parse(localStorage.getItem('apiKeys') || '{}');
+            if (keys.gemini) {
+                document.getElementById('geminiKey').value = keys.gemini;
+            }
+        };
+
+        // Generate tweets using Gemini API
+        async function generateTweets() {
+            const keys = JSON.parse(localStorage.getItem('apiKeys') || '{}');
+            if (!keys.gemini) {
+                alert('Please save your Gemini API key first!');
+                return;
+            }
+
+            const topics = document.getElementById('topics').value;
+            const style = document.getElementById('style').value;
+
+            try {
+                const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + keys.gemini, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `Generate 20 unique tweet ideas about ${topics}. Style: ${style}.
+                                      Each tweet must be in lowercase only.
+                                      Each tweet should be engaging and under 280 characters.
+                                      Make them specific and detailed, not generic.
+                                      Format: Return only the tweets, one per line.
+                                      Add relevant hashtags in lowercase.`
+                            }]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                    const tweets = data.candidates[0].content.parts[0].text
+                        .split('\n')
+                        .filter(tweet => tweet.trim())
+                        .map(tweet => tweet.toLowerCase());
+                    displayTweets(tweets);
+                } else {
+                    throw new Error('Invalid response from Gemini API');
+                }
+            } catch (error) {
+                alert('Error generating tweets: ' + error.message);
+                console.error('Full error:', error);
+            }
+        }
+
+        // Display generated tweets
+        function displayTweets(tweets) {
+            const tweetList = document.getElementById('tweetList');
+            tweetList.innerHTML = '';
+
+            tweets.forEach((tweet, index) => {
+                const tweetCard = document.createElement('div');
+                tweetCard.className = 'bg-white p-4 rounded-lg shadow-md';
+                tweetCard.innerHTML = `
+                    <p class="mb-4">${tweet}</p>
+                    <div class="flex space-x-2">
+                        <a href="https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}"
+                           target="_blank"
+                           class="bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600">
+                            Post to X
+                        </a>
+                        <button onclick="this.parentElement.parentElement.remove()"
+                                class="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600">
+                            Delete
+                        </button>
+                    </div>
+                `;
+                tweetList.appendChild(tweetCard);
+            });
+        }
+
+        // Removed the postTweet function as it's no longer directly posting to the API
+    </script>
+</body>
+</html>
